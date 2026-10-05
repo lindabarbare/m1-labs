@@ -90,6 +90,16 @@ class Submission(SubmissionCreated, SubmissionCreate):
     pass
 
 
+class SubmissionListItem(BaseModel):
+    # CR-3: tikai līgumā noteiktie lauki, bez personas datiem un iesnieguma teksta.
+    id: str
+    status: SubmissionStatus
+    topic: Topic
+    receivedAt: datetime
+    dueDate: date
+    replyChannel: ReplyChannel
+
+
 class Health(BaseModel):
     status: str
     version: str

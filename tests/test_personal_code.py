@@ -1,13 +1,15 @@
 """CR-1: personas koda pārbaude. Komentārā pieņemšanas kritērija numurs.
 
-Pārbauda tikai formātu, ne datumu un kontrolciparu. Visi kodi ir sintētiski.
+Vecajiem kodiem pārbauda datumu, ne kontrolciparu. Visi kodi ir sintētiski:
+derīgajiem vecā formāta kodiem ir gadsimta cipars 0 (1800. gadi).
 """
 
 import logging
+from datetime import date, datetime, timezone
 
 import pytest
 
-from app import storage
+from app import personal_code, storage
 
 
 def post_code(client, payload, code):
@@ -31,7 +33,9 @@ def assert_rejected(response, fake_omd, issue):
         ("320000-00001", "32000000001"),  # 2
         (" 32000000001 ", "32000000001"),  # 3
         (" 320000-00001\t", "32000000001"),  # 3
-        ("311299-21233", "31129921233"),  # 8
+        ("290288-00000", "29028800000"),  # 12: 29.02.1888, garais gads
+        ("150385-00003", "15038500003"),  # 15
+        ("15038500003", "15038500003"),  # 15 bez defises
     ],
 )
 def test_valid_code_is_accepted_and_stored_normalized(
@@ -44,19 +48,52 @@ def test_valid_code_is_accepted_and_stored_normalized(
     assert fake_omd.calls == [stored]
 
 
+def test_checksum_is_not_checked(client, valid_payload):
+    # Ārpus tvēruma: kontrolcipars. 150385-00003 ar citu pēdējo ciparu.
+    response = post_code(client, valid_payload, "150385-00004")
+    assert response.status_code == 201
+
+
 @pytest.mark.parametrize(
-    ("code", "stored"),
+    "code",
     [
-        ("310285-00019", "31028500019"),  # 31.02. neeksistē
-        ("15038500004", "15038500004"),  # nepareizs kontrolcipars
+        "311299-21233",  # 8: 31.12.2099, nākotnē
+        "092089-10078",  # 10: 20. mēnesis
+        "290200-10000",  # 11: 29.02.1900, nav garais gads
+        "150385-50000",  # 13: gadsimta cipars 5
+        "00000010000",  # 14: sākas ar 00
+        "310285-00000",  # 31.02.
+        "000385-00000",  # 0. diena
+        "150085-00000",  # 0. mēnesis
+        "330385-00000",  # sākas ar 33
+        "990385-00000",  # sākas ar 99
+        "150385-30000",  # gadsimta cipars 3
+        "150385-90000",  # gadsimta cipars 9
     ],
 )
-def test_date_and_checksum_are_not_checked(client, valid_payload, code, stored):
-    # Precizējums: tikai formāts. Ārpus tvēruma: datums un kontrolcipars.
-    response = post_code(client, valid_payload, code)
-    assert response.status_code == 201
-    saved = client.get(f"/submissions/{response.json()['id']}").json()
-    assert saved["personalCode"] == stored
+def test_invalid_date_is_rejected(client, valid_payload, fake_omd, code):
+    assert_rejected(post_code(client, valid_payload, code), fake_omd, "INVALID_FORMAT")
+
+
+@pytest.fixture
+def today_15_03_1885(monkeypatch):
+    # Fiksēta "šodiena" 1800. gados, lai robežgadījumu kodi paliktu sintētiski.
+    monkeypatch.setattr(personal_code, "_today", lambda: date(1885, 3, 15))
+
+
+def test_born_today_is_accepted(client, valid_payload, today_15_03_1885):
+    assert post_code(client, valid_payload, "150385-00003").status_code == 201
+
+
+def test_born_tomorrow_is_rejected(client, valid_payload, fake_omd, today_15_03_1885):
+    response = post_code(client, valid_payload, "160385-00003")
+    assert_rejected(response, fake_omd, "INVALID_FORMAT")
+
+
+def test_today_is_latvian_date():
+    # 2026-10-04 22:30 UTC Rīgā jau ir 2026-10-05 01:30.
+    now = datetime(2026, 10, 4, 22, 30, tzinfo=timezone.utc)
+    assert personal_code._today(now) == date(2026, 10, 5)
 
 
 @pytest.mark.parametrize(

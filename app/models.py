@@ -61,12 +61,14 @@ class SubmissionCreate(BaseModel):
     subject: str
     body: str
 
-    @field_validator("personalCode")
+    @field_validator("personalCode", mode="before")
     @classmethod
-    def check_personal_code(cls, value: str) -> str:
+    def check_personal_code(cls, value):
         # Kļūdas tekstā ievadīto vērtību neatkārtojam: tie ir personas dati.
-        if not value.strip():
+        if value is None or (isinstance(value, str) and not value.strip()):
             raise PydanticCustomError("missing", "Personas kods nav ievadīts")
+        if not isinstance(value, str):
+            return value  # str pārbaude atgriezīs INVALID_FORMAT
         try:
             return personal_code.normalize(value)
         except personal_code.InvalidPersonalCode:

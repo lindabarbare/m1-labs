@@ -109,14 +109,6 @@
       INVALID_FORMAT: "Nepareizs formāts",
       TOO_LONG: "Pārāk garš teksts",
     };
-    // Personas koda kļūdas (CR-1). API abos gadījumos atgriež INVALID_FORMAT,
-    // tāpēc precīzu iemeslu nosaka pārlūkā pirms nosūtīšanas.
-    const PERSONAL_CODE_TEXT = {
-      REQUIRED: "Ievadiet personas kodu",
-      FORMAT: "Personas kodam jābūt formātā XXXXXX-XXXXX vai XXXXXXXXXXX",
-      DATE: "Personas koda sākumā nav derīgs datums",
-      INVALID_FORMAT: "Personas kods nav derīgs",
-    };
     const STATUS_TEXT = {
       RECEIVED: "Saņemts",
       IN_PROGRESS: "Izskatīšanā",
@@ -169,38 +161,6 @@
         .join("");
     }
 
-    // Tie paši noteikumi kā app/personal_code.py. Atgriež kļūdas atslēgu vai null.
-    function personalCodeProblem(value) {
-      const code = value.trim();
-      if (code === "") return "REQUIRED";
-      if (!/^\d{6}-?\d{5}$/.test(code)) return "FORMAT";
-      const digits = code.replace("-", "");
-      if (digits.startsWith("32")) return null;
-      const century = { 0: 1800, 1: 1900, 2: 2000 }[digits[6]];
-      const day = Number(digits.slice(0, 2));
-      const month = Number(digits.slice(2, 4));
-      const year = century + Number(digits.slice(4, 6));
-      const date = new Date(Date.UTC(year, month - 1, day));
-      if (
-        century === undefined ||
-        date.getUTCFullYear() !== year ||
-        date.getUTCMonth() !== month - 1 ||
-        date.getUTCDate() !== day
-      ) {
-        return "DATE";
-      }
-      const weights = [1, 6, 3, 7, 9, 10, 5, 8, 4, 2];
-      const sum = weights.reduce((acc, w, i) => acc + w * Number(digits[i]), 0);
-      if ((1101 - sum) % 11 !== Number(digits[10])) return "INVALID_FORMAT";
-      return null;
-    }
-
-    function showPersonalCodeError(problem) {
-      document.querySelector('.field-error[data-for="personalCode"]').textContent =
-        PERSONAL_CODE_TEXT[problem];
-      document.getElementById("personalCode").classList.add("invalid");
-    }
-
     function clearErrors() {
       document.querySelectorAll(".field-error").forEach((el) => (el.textContent = ""));
       document.querySelectorAll(".invalid").forEach((el) => el.classList.remove("invalid"));
@@ -211,10 +171,7 @@
       const unknown = [];
       for (const detail of details || []) {
         const target = document.querySelector(`.field-error[data-for="${detail.field}"]`);
-        const text =
-          (detail.field === "personalCode" && PERSONAL_CODE_TEXT[detail.issue]) ||
-          ISSUE_TEXT[detail.issue] ||
-          detail.issue;
+        const text = ISSUE_TEXT[detail.issue] || detail.issue;
         if (target) {
           target.textContent = text;
           document.getElementById(detail.field)?.classList.add("invalid");
@@ -256,12 +213,6 @@
       event.preventDefault();
       clearErrors();
       const payload = Object.fromEntries(new FormData(form).entries());
-      const problem = personalCodeProblem(payload.personalCode || "");
-      if (problem) {
-        showPersonalCodeError(problem);
-        document.getElementById("personalCode").focus();
-        return;
-      }
       // Tukšus laukus nesūtām: API pats pasaka, kas trūkst.
       for (const key of Object.keys(payload)) {
         if (payload[key] === "") delete payload[key];

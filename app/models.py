@@ -3,7 +3,10 @@
 from datetime import date, datetime
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+from pydantic_core import PydanticCustomError
+
+from app import personal_code
 
 
 class PreferredChannel(str, Enum):
@@ -57,6 +60,19 @@ class SubmissionCreate(BaseModel):
     topic: Topic
     subject: str
     body: str
+
+    @field_validator("personalCode")
+    @classmethod
+    def check_personal_code(cls, value: str) -> str:
+        # Kļūdas tekstā ievadīto vērtību neatkārtojam: tie ir personas dati.
+        if not value.strip():
+            raise PydanticCustomError("missing", "Personas kods nav ievadīts")
+        try:
+            return personal_code.normalize(value)
+        except personal_code.InvalidPersonalCode:
+            raise PydanticCustomError(
+                "personal_code_invalid", "Personas kods nav derīgs"
+            ) from None
 
 
 class SubmissionCreated(BaseModel):

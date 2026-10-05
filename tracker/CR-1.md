@@ -8,8 +8,8 @@ reporter: "Reģistrācijas nodaļa (izdomāts)"
 owner: "@<github-lietotājvārds>"
 contract: "docs/openapi.yaml · POST /submissions · personalCode"
 depends_on: []
-exported: "2026-09-30 · Ezermalas pieteikumu sistēma (simulācija)"
-data_check: "Nav personas datu, iekšējo adrešu vai pielikumu"
+exported: "2026-10-05 · Ezermalas pieteikumu sistēma (simulācija)"
+data_check: "Nav personas datu, iekšējo adrešu vai pielikumu. Personas kodi piemēros ir sintētiski."
 ---
 
 # CR-1 · Personas koda pārbaude iesniegumā
@@ -18,87 +18,41 @@ data_check: "Nav personas datu, iekšējo adrešu vai pielikumu"
 
 ## Apraksts (description)
 
-Iesniegumos bieži tiek norādīti nepareizi personas kodi, kas rada papildu manuālu darbu reģistrācijas nodaļai. Sistēmai pirms iesnieguma saglabāšanas jāpārbauda personas koda formāts un datuma daļas korektums.
-
-Ja personas kods neatbilst noteikumiem, iesnieguma iesniegšana nav atļauta un lietotājam jāparāda saprotams kļūdas paziņojums.
-
-## Biznesa mērķis (business value)
-
-- Samazināt manuālo kļūdu labošanu.
-- Uzlabot datu kvalitāti sistēmā.
-- Samazināt nepareizi aizpildītu iesniegumu skaitu.
-- Samazināt reģistrācijas nodaļas darba apjomu.
-
-## Funkcionālās prasības (functional requirements)
-
-1. Sistēma pieņem personas kodu ar vai bez defises.
-2. Sistēma pārbauda, ka personas kods satur 11 ciparus.
-3. Ja ievadīta defise, tā var atrasties tikai pēc sestā simbola.
-4. Jāvalidē datuma daļa:
-   - diena;
-   - mēnesis;
-   - gads.
-5. Ja personas koda pirmie divi cipari ir no 01 līdz 31, jāpiemēro klasiskais personas koda formāts.
-6. Ja personas koda pirmie divi cipari ir 32, personas kods jāuzskata par jaunā formāta personas kodu.
-7. Pēc validācijas personas kods datubāzē tiek saglabāts bez defises.
-8. Nederīga personas koda gadījumā iesniegums netiek saglabāts.
+Iesniegumos bieži ir nepareizi personas kodi. Sistēmai jāpārbauda, vai personas kods ir derīgs, un nederīgi iesniegumi jānoraida.
 
 ## Pieņemšanas kritēriji (acceptance criteria)
 
 | # | Ievade | Sagaidāmais rezultāts |
 |---|---|---|
-| 1 | 091288-10078 | akceptēts, datubāzē saglabā 09128810078 |
-| 2 | 09238910078 | neakceptēts, datums 09.23.89 neeksistē |
-| 3 | 322389-10078 | akceptēts, jaunā formāta personas kods |
-| 4 | 32238910078 | akceptēts |
-| 5 | 09128810078 | akceptēts |
-| 6 | 310281-10067 | neakceptēts, februārī nav 31. datuma |
-| 7 | 31028110067 | neakceptēts |
-| 8 | 091288--10078 | neakceptēts, nederīgs formāts |
-| 9 | 091288-1007 | neakceptēts, par maz ciparu |
-|10 | 091288100789 | neakceptēts, par daudz ciparu |
-|11 | 091288-10A78 | neakceptēts, atļauti tikai cipari un viena defise |
-|12 | tukša vērtība | neakceptēts, obligāts lauks |
-
-## Kļūdas paziņojumi (error messages)
-
-| Kods | Ziņojums |
-|--------|--------|
-| PC-001 | Ievadiet personas kodu. |
-| PC-002 | Personas koda formāts nav derīgs. |
-| PC-003 | Personas kodā norādītais datums nav derīgs. |
-| PC-004 | Personas kods drīkst saturēt tikai ciparus un vienu defisi. |
-
-## Nefunkcionālās prasības (non-functional requirements)
-
-- Validācija jāveic servera pusē.
-- Validācijas rezultāts jāsaņem vienā API pieprasījumā.
-- Validācijas izpildes laiks nedrīkst pārsniegt 1 sekundi normālas slodzes apstākļos.
-- Personas kods nedrīkst tikt modificēts, izņemot defises izņemšanu pirms saglabāšanas.
+| 1 | `32000000001` | 201, saglabāts `32000000001` |
+| 2 | `320000-00001` | 201, saglabāts `32000000001` |
+| 3 | `" 32000000001 "` | 201 (atstarpes noņemtas) |
+| 4 | `3200000000` (10 cipari) | 400 `INVALID_FORMAT` |
+| 5 | `320000000012` (12 cipari) | 400 `INVALID_FORMAT` |
+| 6 | `32000000O01` (burts O) | 400 `INVALID_FORMAT` |
+| 7 | Lauka nav | 400 `REQUIRED` |
+| 8 | Vecā formāta sintētisks kods `311299-21233` | 201, saglabāts `31129921233` |
+| 9 | `3200-0000001` (defise nepareizā vietā) | 400 `INVALID_FORMAT` |
 
 ## Precizējumi (clarifications)
 
 | Jautājums | Atbilde | Kas atbildēja, kad |
 |---|---|---|
-| Vai jāatbalsta personas kodi ar defisi? | Jā, jāatbalsta abi formāti. | Reģistrācijas nodaļa, 2026-09-28 |
-| Kā saglabāt personas kodu datubāzē? | Vienmēr bez defises. | Sistēmas īpašnieks, 2026-09-28 |
-| Vai jāveic kontrolsummas pārbaude? | Nē, šīs izmaiņas ietvaros nav nepieciešams. | Produkta īpašnieks, 2026-09-29 |
+| Vai pieņemt defisi? | Abus veidus: `DDMMYY-NNNNN` un 11 ciparus. Saglabāt 11 ciparus bez defises. | Produkta īpašnieks, 2026-09-30 |
+| Vai pārbaudīt dzimšanas datumu vai kontrolciparu? | Nē. Tikai formātu. Jaunajiem kodiem (sākas ar `32`) nav ne viena, ne otra. | Produkta īpašnieks, 2026-09-30 |
+| Tukša virkne vai tikai atstarpes? | Tāpat kā tad, ja lauka nav: 400 `REQUIRED`. | Produkta īpašnieks, 2026-09-30 |
+| Kāda ir kļūdas atbilde? | 400 pēc līguma (API contract): `INVALID_FORMAT`, vai `REQUIRED`, ja lauka nav. Kļūda atbilst līguma kļūdu shēmai. | Produkta īpašnieks, 2026-09-30 |
+| Vai kļūdas ziņojumā drīkst atkārtot ievadīto kodu? | Nē. Ne atbildē, ne žurnālā. Tikai lauka nosaukums un kļūdas kods. | Produkta īpašnieks, 2026-09-30 |
+| Vai mainās atbildes shēma? | Nē. | Produkta īpašnieks, 2026-09-30 |
 
 ## Ārpus tvēruma (out of scope)
 
-- Personas koda kontrolsummas validācija.
-- Personas datu pārbaude ārējās sistēmās.
-- Dzimuma vai vecuma noteikšana no personas koda.
-- Esošo ierakstu migrācija vai labošana datubāzē.
-
-## Tehniskās piezīmes (implementation notes)
-
-- API līmenī validācija jāizpilda pirms datu saglabāšanas.
-- Pēc veiksmīgas validācijas jānormalizē vērtība, izņemot defisi.
-- Validācijas loģiku ieteicams realizēt atsevišķā servisā vai utilītē, lai to varētu izmantot atkārtoti citās sistēmas vietās.
+- Kontrolcipara un dzimšanas datuma pārbaude
+- Pārbaude reģistrā, vai persona eksistē (CR-2)
+- Citu lauku pārbaude: vārds, e-pasts, temats, teksts
+- Esošie iesniegumi ar nepareiziem kodiem
+- Ārvalstnieki bez personas koda
 
 ## Komentāri (comments)
 
 - 2026-09-28 · Reģistrācijas nodaļa: "Vakar 12 iesniegumi ar nepareizu kodu. Visi jālabo ar roku."
-- 2026-09-29 · Produkta īpašnieks: "Svarīgi saglabāt atbalstu ievadei gan ar defisi, gan bez tās."
-``

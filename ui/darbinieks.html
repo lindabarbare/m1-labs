@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="lv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Iesniegumu saraksts · Ezermalas novada pašvaldība</title>
+  <style>
+    :root {
+      --navy: #1D3557;
+      --teal: #2A9D8F;
+      --coral: #E76F51;
+      --bg: #F1F3F5;
+      --line: #C9CED6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: #1a1a1a;
+    }
+    header { background: var(--navy); color: #fff; padding: 16px; }
+    header h1 { margin: 0; font-size: 1.25rem; }
+    header p { margin: 4px 0 0; font-size: 0.85rem; opacity: 0.85; }
+    main { max-width: 960px; margin: 0 auto; padding: 16px; }
+    .card { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+    label { display: block; font-weight: 600; }
+    input, select {
+      padding: 8px; margin-top: 4px; font: inherit;
+      border: 1px solid var(--line); border-radius: 6px; background: #fff;
+    }
+    .field-error { color: var(--coral); font-size: 0.9rem; margin-top: 4px; min-height: 1em; }
+    .invalid { border-color: var(--coral); }
+    button {
+      padding: 9px 18px; font: inherit; font-weight: 600;
+      color: #fff; background: var(--teal); border: 0; border-radius: 6px; cursor: pointer;
+    }
+    .message { padding: 12px; border-radius: 6px; margin-bottom: 16px; }
+    .message.error { background: #fdece7; border: 1px solid var(--coral); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; background: #fff; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); }
+    th { background: #e8ecf1; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Ezermalas novada pašvaldība · Iesniegumu saraksts</h1>
+    <p>Mācību prototips. Visi dati ir sintētiski.</p>
+  </header>
+  <main>
+    <form class="card filters" id="filters" novalidate>
+      <div>
+        <label for="status">Statuss</label>
+        <input id="status" name="status" placeholder="piemēram, RECEIVED">
+        <div class="field-error" data-for="status"></div>
+      </div>
+      <div>
+        <label for="topic">Tēma</label>
+        <select id="topic" name="topic">
+          <option value="">Visas</option>
+        </select>
+        <div class="field-error" data-for="topic"></div>
+      </div>
+      <div>
+        <button type="submit">Meklēt</button>
+        <div class="field-error"></div>
+      </div>
+    </form>
+    <div id="message" aria-live="polite"></div>
+    <p id="count"></p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Numurs</th><th>Statuss</th><th>Tēma</th><th>Saņemts</th><th>Termiņš</th><th>Kanāls</th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </main>
+  <script>
+    // Filtrus pārbauda API. Forma tikai parāda API kļūdu.
+    const form = document.getElementById("filters");
+    const rows = document.getElementById("rows");
+    const count = document.getElementById("count");
+    const message = document.getElementById("message");
+
+    function cell(text) {
+      const td = document.createElement("td");
+      td.textContent = text == null ? "" : text;
+      return td;
+    }
+
+    function clearErrors() {
+      document.querySelectorAll(".field-error").forEach((el) => (el.textContent = ""));
+      document.querySelectorAll(".invalid").forEach((el) => el.classList.remove("invalid"));
+      message.className = "";
+      message.textContent = "";
+    }
+
+    function showError(error) {
+      message.className = "message error";
+      message.textContent = error.message;
+      for (const detail of error.details || []) {
+        const target = document.querySelector(`.field-error[data-for="${detail.field}"]`);
+        if (target) target.textContent = "Nederīga vērtība";
+        const input = document.getElementById(detail.field);
+        if (input) input.classList.add("invalid");
+      }
+    }
+
+    async function loadTopics() {
+      try {
+        const response = await fetch("/topics");
+        const select = document.getElementById("topic");
+        for (const topic of await response.json()) {
+          const option = document.createElement("option");
+          option.value = topic.code;
+          option.textContent = topic.name;
+          select.appendChild(option);
+        }
+      } catch (error) {
+        message.className = "message error";
+        message.textContent = "Neizdevās ielādēt tēmas.";
+      }
+    }
+
+    async function load(event) {
+      if (event) event.preventDefault();
+      clearErrors();
+      rows.innerHTML = "";
+      count.textContent = "";
+      const params = new URLSearchParams();
+      const status = document.getElementById("status").value.trim();
+      const topic = document.getElementById("topic").value;
+      if (status) params.set("status", status);
+      if (topic) params.set("topic", topic);
+      try {
+        const response = await fetch("/submissions?" + params.toString());
+        const data = await response.json();
+        if (!response.ok) {
+          showError(data.error);
+          return;
+        }
+        count.textContent = "Atrasti: " + data.length;
+        for (const s of data) {
+          const tr = document.createElement("tr");
+          [s.id, s.status, s.topic, s.receivedAt.slice(0, 10), s.dueDate, s.replyChannel]
+            .forEach((value) => tr.appendChild(cell(value)));
+          rows.appendChild(tr);
+        }
+      } catch (error) {
+        message.className = "message error";
+        message.textContent = "Neizdevās ielādēt sarakstu. Mēģiniet vēlreiz.";
+      }
+    }
+
+    form.addEventListener("submit", load);
+    loadTopics();
+    load();
+  </script>
+</body>
+</html>

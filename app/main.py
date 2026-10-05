@@ -20,6 +20,7 @@ from app.models import (
     Submission,
     SubmissionCreate,
     SubmissionCreated,
+    SubmissionListItem,
     SubmissionStatus,
     Topic,
     TopicItem,
@@ -87,6 +88,23 @@ def create_submission(
     # Žurnālā tikai ID: bez personas koda un iesnieguma teksta.
     logger.info("Jauns iesniegums: %s", record["id"])
     return SubmissionCreated(**record)
+
+
+@app.get(
+    "/submissions",
+    response_model=list[SubmissionListItem],
+    responses={400: {"model": Error}},
+    tags=["Iesniegumi"],
+)
+def list_submissions(
+    status: SubmissionStatus | None = None, topic: Topic | None = None
+) -> list[SubmissionListItem]:
+    # Līgumā abi filtri ir enum: nezināma vērtība ir 400 VALIDATION_ERROR.
+    records = storage.list_submissions(
+        status=status.value if status else None,
+        topic=topic.value if topic else None,
+    )
+    return [SubmissionListItem(**record) for record in records]
 
 
 @app.get(
